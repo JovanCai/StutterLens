@@ -1,0 +1,37 @@
+name: 问题反馈 / Bug report
+description: 误判、漏判、崩溃或其他异常
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。附上报告的 JSON 文件对排查帮助最大，文件在 `%LOCALAPPDATA%\StutterLens\Reports`，其中的路径已经隐去了你的用户名。
+  - type: textarea
+    id: what
+    attributes:
+      label: 发生了什么
+      description: 你看到了什么，原本期望看到什么
+    validations:
+      required: true
+  - type: input
+    id: game
+    attributes:
+      label: 游戏名称和是否有反作弊
+      placeholder: 例如：艾尔登法环（EAC，离线模式）
+  - type: input
+    id: version
+    attributes:
+      label: StutterLens 版本
+      description: 运行 `StutterLens.exe --version` 查看
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: 系统与硬件
+      placeholder: 例如：Windows 11 24H2，i7-10700K，RTX 3080
+  - type: textarea
+    id: report
+    attributes:
+      label: 报告 JSON 或控制台输出
+      description: 可以把 JSON 文件直接拖进来

@@ -1,0 +1,54 @@
+name: Release
+
+# 推送 v1.2.3 这样的标签时自动打包，并创建一个“草稿”发布。
+# 草稿需要维护者在 GitHub 上检查后手动点击发布。
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Resolve version
+        id: ver
+        shell: pwsh
+        run: |
+          $v = "${{ github.ref_name }}".TrimStart('v')
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Test
+        run: dotnet test StutterLens.sln -c Release
+
+      - name: Publish
+        run: dotnet publish src/StutterLens -p:PublishProfile=win-x64 -p:Version=${{ steps.ver.outputs.version }}
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $v = "${{ steps.ver.outputs.version }}"
+          $name = "StutterLens-$v-win-x64"
+          New-Item -ItemType Directory -Force "dist/$name" | Out-Null
+          Copy-Item artifacts/publish/StutterLens.exe, README.md, README.en.md, LICENSE, CHANGELOG.md "dist/$name/"
+          Compress-Archive -Path "dist/$name/*" -DestinationPath "dist/$name.zip"
+          $hash = (Get-FileHash "dist/$name.zip" -Algorithm SHA256).Hash.ToLower()
+          "$hash  $name.zip" | Out-File -Encoding ascii "dist/$name.zip.sha256"
+          Get-Content "dist/$name.zip.sha256"
+
+      - name: Create draft release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $v = "${{ steps.ver.outputs.version }}"
+          gh release create "${{ github.ref_name }}" dist/*.zip dist/*.sha256 `
+            --draft --title "StutterLens $v" --generate-notes

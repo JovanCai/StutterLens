@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>StutterLens</RootNamespace>
+    <AssemblyName>StutterLens</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+
+    <!-- 版本与元数据（发布时由 CI 通过 -p:Version=x.y.z 覆盖） -->
+    <Version>0.1.0</Version>
+    <Product>StutterLens</Product>
+    <AssemblyTitle>StutterLens 游戏卡顿检测与诊断</AssemblyTitle>
+    <Description>游戏卡顿检测与诊断工具</Description>
+    <Copyright>Copyright (c) 2026 StutterLens contributors</Copyright>
+    <RepositoryType>git</RepositoryType>
+
+    <!-- 轻量化：工作站 GC、非并发，减少后台线程与内存占用 -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Diagnostics.Tracing.TraceEvent" Version="3.1.30" />
+    <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="10.0.15" />
+    <PackageReference Include="System.Management" Version="10.0.15" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="StutterLens.Tests" />
+  </ItemGroup>
+
+</Project>

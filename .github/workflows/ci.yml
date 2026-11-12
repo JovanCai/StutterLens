@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build
+        run: dotnet build StutterLens.sln -c Release
+
+      - name: Test
+        run: dotnet test StutterLens.sln -c Release --no-build
+
+      - name: Publish (smoke test)
+        run: dotnet publish src/StutterLens -p:PublishProfile=win-x64
+
+      - name: Check single-file exe runs
+        shell: pwsh
+        run: |
+          $v = & artifacts/publish/StutterLens.exe --version
+          Write-Host $v
+          if ($LASTEXITCODE -ne 0) { exit 1 }

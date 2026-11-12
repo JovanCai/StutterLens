@@ -1,0 +1,16 @@
+name: 功能建议 / Feature request
+description: 新的检测项、知识库条目或改进建议
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: 建议内容
+      description: 希望增加或改进什么，解决什么问题
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: 补充信息
+      description: 相关的游戏、软件、驱动名称，或参考资料
