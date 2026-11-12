@@ -231,6 +231,13 @@ public static class KnowledgeBase
             Easy("鼠标回报率在 4000Hz 以上的话，降到 1000Hz 对比。"),
             Hands("鼠标键盘直接接主板背板接口，不经过集线器或前面板。"),
         }),
+        new("bluetooth", "蓝牙驱动", DriverMeaning, new[]
+        {
+            Easy("手柄改用数据线或接收器连接，对比一局。"),
+            Easy("断开暂时不用的蓝牙设备，尤其是蓝牙耳机。"),
+            Hands("从主板或笔记本官网更新蓝牙驱动。"),
+            Hands("在设备管理器中打开蓝牙适配器的属性，在“电源管理”里取消勾选“允许计算机关闭此设备以节约电源”。"),
+        }),
         new("audio", "声卡驱动", DriverMeaning, new[]
         {
             Hands("关闭播放设备的音频增强和空间音效。"),
@@ -259,6 +266,11 @@ public static class KnowledgeBase
         ("storport", "disk"), ("stornvme", "disk"), ("storahci", "disk"), ("iastor", "disk"),
         ("acpi", "power"), ("intelppm", "power"), ("amdppm", "power"),
         ("usbxhci", "usb"), ("usbport", "usb"), ("ucx01000", "usb"), ("usbhub", "usb"), ("hidclass", "usb"),
+        // KMDF 驱动的 DPC 都记在 Wdf01000 名下，游戏时最常见的来源是 USB 控制器（USB 蓝牙适配器也挂在它下面）
+        ("wdf01000", "usb"),
+        ("bthport", "bluetooth"), ("bthusb", "bluetooth"), ("bthenum", "bluetooth"), ("bthmini", "bluetooth"),
+        ("hidbth", "bluetooth"), ("bthle", "bluetooth"), ("ibtusb", "bluetooth"), ("btfilter", "bluetooth"),
+        ("rtkbtfilter", "bluetooth"), ("mtkbtfilter", "bluetooth"), ("bcbtums", "bluetooth"),
         ("ntoskrnl", "system"), ("hal", "system"),
     };
 

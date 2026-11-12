@@ -45,7 +45,8 @@ switch (cmd)
 
     case "check":
         Log.Info("StutterLens 系统设置检查（只读，不修改任何设置）\n");
-        Log.Info($"正在运行的反作弊：{AntiCheatDetector.Detect()}\n");
+        Log.Info($"正在运行的反作弊：{AntiCheatDetector.Detect()}");
+        Log.Info($"外设：{InputInfo.Describe(Peripherals.Snapshot())}\n");
         var findings = ConfigChecker.Run(Opt("--game"));
         if (findings.Count == 0) Log.Info("未发现明显的设置问题。", ConsoleColor.Green);
         foreach (var f in findings.OrderByDescending(f => f.Severity))
@@ -62,6 +63,40 @@ switch (cmd)
         Log.Info($"运行中的反作弊进程：{(st.RunningProcesses.Count == 0 ? "无" : string.Join("、", st.RunningProcesses))}");
         Log.Info($"已加载的反作弊驱动：{(st.LoadedDrivers.Count == 0 ? "无（没用管理员身份运行时可能查不到）" : string.Join("、", st.LoadedDrivers))}");
         return 0;
+
+    case "config":
+    {
+        var cfg = Settings.Load();
+        bool changed = false;
+        if (Opt("--reports") is { } loc)
+        {
+            var dir = Settings.Resolve(loc);
+            if (!Settings.TryUse(dir, out var err)) { Log.Warn($"无法写入 {dir}：{err}"); return 1; }
+            cfg.ReportLocation = loc.ToLowerInvariant() is Settings.App or Settings.AppData ? loc.ToLowerInvariant() : dir;
+            changed = true;
+        }
+        if (int.TryParse(Opt("--keep"), out var keep) && keep >= 0) { cfg.KeepReports = keep; changed = true; }
+        if (!changed && Interactive())
+        {
+            Log.Info($"当前报告位置：{cfg.ReportDir}");
+            Log.Info($"最多保留：{(cfg.KeepReports > 0 ? cfg.KeepReports + " 局" : "不限")}\n");
+            cfg.ReportLocation = PromptReportLocation();
+            changed = true;
+        }
+        if (changed)
+        {
+            var file = cfg.Save();
+            Log.Info($"\n已保存。报告位置：{cfg.ReportDir}；最多保留 {(cfg.KeepReports > 0 ? cfg.KeepReports + " 局" : "不限")}。", ConsoleColor.Green);
+            Log.Info($"设置文件：{file}");
+        }
+        else
+        {
+            Log.Info($"报告位置：{cfg.ReportDir}");
+            Log.Info($"最多保留：{(cfg.KeepReports > 0 ? cfg.KeepReports + " 局" : "不限")}");
+        }
+        PauseIfOwnConsole();
+        return 0;
+    }
 
     case "monitor":
     case "probe":
@@ -124,6 +159,27 @@ if (cmd == "probe")
     return 0;
 }
 
+Log.Quiet = Flag("--quiet");
+var settings = Settings.Load();
+string outDir;
+if (Opt("--out") is { } outOpt) outDir = Path.GetFullPath(outOpt);
+else
+{
+    if (settings.ReportLocation.Length == 0 && Interactive())
+    {
+        Log.Info("首次运行，先选一下报告的保存位置（每局约 100KB，之后可以运行 StutterLens.exe config 修改）。\n");
+        settings.ReportLocation = PromptReportLocation();
+        try { settings.Save(); } catch (Exception ex) { Log.Warn("设置保存失败：" + ex.Message); }
+        Log.Info("");
+    }
+    outDir = settings.ReportDir;
+}
+if (!Settings.TryUse(outDir, out var outErr))
+{
+    Log.Warn($"报告文件夹 {outDir} 无法写入（{outErr}），本次改存到 {Settings.AppDataReportsDir}。");
+    outDir = Settings.AppDataReportsDir;
+}
+
 var opt = new MonitorOptions
 {
     Mode = (Opt("--mode") ?? "auto").ToLowerInvariant() switch
@@ -133,13 +189,13 @@ var opt = new MonitorOptions
         _ => MonitorMode.Auto,
     },
     ForcedExe = Opt("--process") is { } p ? (p.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? p : p + ".exe") : null,
-    OutDir = Opt("--out") ?? StutterLens.Report.ReportWriter.DefaultDir,
+    OutDir = outDir,
+    KeepReports = Opt("--out") == null ? settings.KeepReports : 0,
     Once = Flag("--once"),
     IncludeBackground = Flag("--include-background"),
     OpenReport = !Flag("--no-open"),
 };
 if (double.TryParse(Opt("--min-session"), out var ms)) opt.MinSessionSec = ms;
-Log.Quiet = Flag("--quiet");
 
 Log.Info($"StutterLens {AppVersion()} · 游戏卡顿检测与诊断");
 if (System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.Arm64
@@ -168,6 +224,35 @@ GC.KeepAlive(closeHandler);
 if (!cts.IsCancellationRequested || reports == 0 || exitCode != 0) PauseIfOwnConsole();
 return exitCode;
 
+static bool Interactive() => !Log.Quiet && !Console.IsInputRedirected && Native.OwnsConsole();
+
+static string PromptReportLocation()
+{
+    Console.WriteLine("报告保存在哪里？");
+    Console.WriteLine($"  1. 程序所在文件夹：{Settings.AppReportsDir}");
+    Console.WriteLine($"  2. 用户 AppData 文件夹：{Settings.AppDataReportsDir}");
+    Console.WriteLine("  3. 自定义文件夹");
+    while (true)
+    {
+        Console.Write("请输入 1、2 或 3，直接回车选 1：");
+        var choice = (Console.ReadLine() ?? "").Trim();
+        string loc, dir;
+        if (choice is "" or "1") (loc, dir) = (Settings.App, Settings.AppReportsDir);
+        else if (choice == "2") (loc, dir) = (Settings.AppData, Settings.AppDataReportsDir);
+        else if (choice == "3")
+        {
+            Console.Write("请输入文件夹路径（比如 D:\\StutterLens 报告）：");
+            var path = (Console.ReadLine() ?? "").Trim().Trim('"');
+            if (path.Length == 0) continue;
+            try { dir = Settings.Resolve(path); } catch { Console.WriteLine("路径格式不对，请重新输入。"); continue; }
+            loc = dir;
+        }
+        else continue;
+        if (Settings.TryUse(dir, out var err)) { Console.WriteLine($"报告将保存到：{dir}"); return loc; }
+        Console.WriteLine($"这个文件夹无法写入（{err}），请换一个。");
+    }
+}
+
 static void PauseIfOwnConsole()
 {
     if (Log.Quiet || Console.IsInputRedirected || !Native.OwnsConsole()) return;
@@ -187,6 +272,9 @@ static void PrintHelp()
   StutterLens [monitor] [选项]   后台监控，自动识别游戏，游戏结束时生成报告（默认）
   StutterLens check              系统配置体检（无需管理员）
   StutterLens anticheat          列出检测到的反作弊组件
+  StutterLens config             修改报告保存位置
+      --reports app|appdata|路径  app：程序所在文件夹；appdata：%LOCALAPPDATA%\StutterLens\Reports
+      --keep N                    最多保留 N 局的报告，超出时删除最旧的（默认 100，0 表示不限）
   StutterLens probe [--seconds N] 调试：列出各进程的帧提交频率
 
 monitor 选项：
@@ -194,7 +282,7 @@ monitor 选项：
                           full：深度模式（单机游戏，可定位到具体驱动和磁盘），检测到反作弊时仍会强制切换到安全模式
                           safe：反作弊安全模式（只用系统公开计数器与图形事件）
   --process name.exe      只监控指定游戏
-  --out 目录              报告输出目录（默认 %LOCALAPPDATA%\StutterLens\Reports）
+  --out 目录              本次报告输出到指定目录（不改变设置，也不清理旧报告）
   --once                  第一个游戏会话结束后退出
   --include-background    游戏不在前台时的卡顿也计入（副屏窗口化游戏）
   --no-open               生成报告后不自动打开浏览器

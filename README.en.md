@@ -4,7 +4,7 @@ English | [中文](README.md)
 
 StutterLens is a lightweight background tool for Windows that detects in-game stutters, works out what most likely caused each one, and tells you what to do about it. When the game closes, it opens a report in your browser.
 
-- **Finds the cause.** Each stutter is matched against what the system was doing at that moment: driver latency, a background program, memory, disk, or the game itself.
+- **Finds the cause.** Each stutter is matched against what the system was doing at that moment: driver latency, a background program, GPU load, VRAM, memory, disk, keyboard/mouse/controller disconnects, a Bluetooth controller, or the game itself.
 - **Suggests fixes.** Every cause comes with steps, sorted from easy to advanced.
 - **Leaves the game alone.** No injection, no reading game memory, no kernel driver. When an anti-cheat is present it switches to an even more conservative mode.
 - **Stays out of the way.** Measured overhead is about 0.2% CPU and 85 MB of memory (i7-10700K, deep mode).
@@ -18,7 +18,7 @@ The report UI and suggestions are currently in Chinese. Sample report: [docs/sam
 3. Play as usual. StutterLens picks up the game automatically.
 4. When the game exits, the report opens in your browser. You can also press Ctrl+C or close the window to finish early.
 
-Reports are saved to `%LOCALAPPDATA%\StutterLens\Reports`.
+On first run you choose where reports go: next to the program (default), `%LOCALAPPDATA%\StutterLens\Reports`, or a custom folder. Each session is about 100 KB and the newest 100 are kept. Run `StutterLens.exe config` to change this later.
 
 > Windows SmartScreen may warn about an unrecognized app because the binary is not code-signed yet. Choose "More info → Run anyway", or build from source.
 
@@ -53,6 +53,7 @@ StutterLens.exe check                    # system settings check, no admin neede
 StutterLens.exe --process game.exe       # watch one specific game
 StutterLens.exe --mode safe              # force safe mode
 StutterLens.exe --include-background     # count stutters while the game is not focused
+StutterLens.exe config                   # change where reports are saved
 StutterLens.exe help                     # all options
 ```
 

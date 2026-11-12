@@ -57,6 +57,19 @@ public static class ReportWriter
             avgFps = Math.Round(s.AvgFps, 1),
             low1Fps = Math.Round(s.Low1Fps, 1),
             low01Fps = Math.Round(s.Low01Fps, 1),
+            noticeablePerMin = Math.Round(stutters.Count(x => x.Noticeable) / Math.Max(s.DurationSec / 60, 0.01), 2),
+            input = new
+            {
+                connection = s.Input.Connection,
+                btPads = s.Input.BtPads.ToList(),
+                btSeconds = s.Input.BtSeconds,
+                seconds = s.Input.Seconds,
+                drops = s.Input.Drops,
+                btPadDrops = s.Input.BtDrops,
+                devices = s.Input.Devices.Values.Select(d => new { d.Name, kind = d.Kind.ToString(), transport = d.Transport.ToString() }),
+                btRadio = s.Input.Radio == null ? null : new { s.Input.Radio.Name, version = s.Input.Radio.Version },
+                wifiChannel = s.Input.WifiChannel,
+            },
             stutters = stutters.Select(x => new
             {
                 time = Clock.ToLocal(x.T),
@@ -179,6 +192,7 @@ public static class ReportWriter
             : "<p>采集方式：深度模式。在公开数据之外开启了内核 ETW（DPC/ISR 和磁盘 IO），同样没有打开游戏进程的句柄，也没有注入或读取游戏内存。</p>");
         sb.Append($"<p>帧数据：共 {s.Frames:N0} 帧，平均 {F(s.AvgFps, 1)} FPS，1% Low {F(s.Low1Fps, 1)} FPS，0.1% Low {F(s.Low01Fps, 1)} FPS。</p>");
         sb.Append($"<p>StutterLens 自身开销：CPU 平均 {F(r.SelfCpuAvg, 2)}%，峰值 {F(r.SelfCpuMax, 2)}%，内存约 {r.SelfMemMB}MB。</p>");
+        sb.Append($"<p>外设：{H(s.Input.Describe())}。</p>");
         if (r.EventsLost > 0) sb.Append($"<p class=\"bad\">采集中丢失了 {r.EventsLost} 个 ETW 事件，部分帧时间可能不准。</p>");
         foreach (var n in r.Notes) sb.Append($"<p>{H(n)}</p>");
         if (r.DpcTop.Count > 0)

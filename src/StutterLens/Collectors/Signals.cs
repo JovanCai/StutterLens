@@ -6,6 +6,8 @@ public readonly record struct DpcSample(double T, float DurMs, int Driver, bool 
 public readonly record struct DiskSample(double T, float LatencyMs, int Pid, int Bytes, bool Write) : ITimed;
 public readonly record struct FocusEvent(double T, int Pid) : ITimed;
 public readonly record struct ProcStartEvent(double T, int Pid, int ParentPid, string Name) : ITimed;
+/// <summary>键盘、鼠标、手柄接入或断开。</summary>
+public readonly record struct InputEvent(double T, StutterLens.Platform.InputDevice Device, bool Connected) : ITimed;
 
 public sealed record ProcCpu(int Pid, string Name, double CpuPct /* 占用的“核”百分比，100 = 一个满核 */);
 
@@ -22,7 +24,10 @@ public sealed class SysSample : ITimed
     public double GpuUtil;         // 最忙 GPU 引擎 %
     public double GpuTargetUtil;   // 目标游戏的 GPU 3D 引擎占用 %
     public double VramUsedMB, VramTotalMB;
+    public double VramSharedMB;    // 显卡占用的共享内存（显存不够时溢出到这里）
+    public List<ProcCpu> GpuProcs = new(); // 占用显卡的其他进程，CpuPct 字段此处表示 GPU 占用 %
     public double TargetCpuPct, TargetHardFaultsPerSec, TargetReadMBps;
+    public bool BtPadConnected;    // 此刻有蓝牙手柄连着
     public List<ProcCpu> TopProcs = new();
 }
 
@@ -91,6 +96,7 @@ public sealed class SignalStore
     public readonly TimedRing<DiskSample> Disk = new(100_000);
     public readonly TimedRing<FocusEvent> Focus = new(2_000);
     public readonly TimedRing<ProcStartEvent> ProcStarts = new(2_000);
+    public readonly TimedRing<InputEvent> Input = new(2_000);
     public readonly TimedRing<SysSample> Sys = new(3_600);
     public readonly DriverTable Drivers = new();
 
@@ -115,6 +121,23 @@ public sealed class SignalStore
             return _dpcTotals.Select(kv => (Drivers.Name(kv.Key), kv.Value.Count, kv.Value.TotalMs, kv.Value.MaxMs))
                 .OrderByDescending(x => x.TotalMs).ToList();
     }
+
+    // 进程加载过的手柄输入组件（来自内核 ImageLoad 事件，含会话开始时已加载模块的补发事件）
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<int, string> _padApi = new();
+    private static readonly string[] PadModules =
+    {
+        "xinput1_4.dll", "xinput1_3.dll", "xinput9_1_0.dll", "xinputuap.dll", "dinput8.dll", "dinput.dll",
+        "windows.gaming.input.dll", "gameinput.dll", "sdl2.dll", "sdl3.dll",
+    };
+
+    public void NoteModule(int pid, string path)
+    {
+        var name = Path.GetFileName(path);
+        if (name.Length > 0 && PadModules.Contains(name, StringComparer.OrdinalIgnoreCase)) _padApi.TryAdd(pid, name);
+    }
+
+    /// <summary>游戏加载的手柄输入组件名；没有加载返回 null。只在深度模式下有数据。</summary>
+    public string? GamepadApi(int pid) => _padApi.TryGetValue(pid, out var n) ? n : null;
 
     public void ResetDpcTotals() { lock (_dpcGate) _dpcTotals.Clear(); }
 

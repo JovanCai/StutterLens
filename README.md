@@ -18,7 +18,7 @@ StutterLens 是一款后台运行的 Windows 游戏卡顿诊断工具。它会�
 3. 正常打开游戏玩就行，StutterLens 会自动识别并开始记录。
 4. 游戏退出后，报告会自动在浏览器中打开。中途想结束，在 StutterLens 窗口按 Ctrl+C 或直接关闭窗口，同样会生成报告。
 
-报告保存在 `%LOCALAPPDATA%\StutterLens\Reports`，每次游戏一份 HTML 和一份 JSON。
+第一次运行时会让你选报告的保存位置：程序所在文件夹（默认）、`%LOCALAPPDATA%\StutterLens\Reports`，或者自定义文件夹。每局一份 HTML 和一份 JSON，约 100KB，默认只保留最近 100 局。之后想改位置，运行 `StutterLens.exe config`。
 
 > **首次运行时 Windows 可能提示“已保护你的电脑”。** 这是因为程序还没有代码签名，点“更多信息 → 仍要运行”即可。个别杀毒软件可能因为程序需要管理员权限并读取系统事件而误报，可以自行检查 [源码](src/StutterLens) 或从源码构建。
 
@@ -62,8 +62,15 @@ StutterLens 完全在本地运行，**不联网，不收集或上传任何数据
 | 显存已满 | GPU Adapter Memory | 两者 |
 | CPU 满载或降频 | 处理器利用率与 `% Processor Performance` | 两者 |
 | 窗口切换或弹窗打断 | 前台窗口变化 | 两者 |
+| 显卡瞬时满载、后台程序抢占显卡、显存溢出到内存 | GPU Engine 与 GPU Adapter Memory 计数器 | 两者 |
+| 键盘、鼠标、手柄断开或接入 | 设备树中输入设备的变化 | 两者 |
+| 蓝牙手柄延迟 | 手柄连接方式、蓝牙适配器版本、Wi-Fi 频段，以及和换用接收器那一局的对比 | 两者 |
 | 游戏自身卡顿（多为着色器编译） | 排除法，结合游戏自身的 CPU 与读盘突增 | 两者 |
 | 周期性卡顿、开局集中卡顿、CPU/GPU 瓶颈 | 整局统计 | 两者 |
+
+硬盘读取和驱动延迟这类“一直都在发生”的现象，会和卡顿之前 60 秒内不卡的时段做对照：如果平时也经常这样，就降低把握，避免把巧合当成原因。
+
+蓝牙手柄的延迟发生在游戏内部，系统层面看不到直接证据。StutterLens 会记下每局的手柄连接方式，同一个游戏换用数据线或接收器再玩一局，报告会自动对比两局的卡顿次数。外设检测只读取设备列表，不读取按键和鼠标输入。
 
 报告里还会附上一份系统设置检查。除了电源计划和 Xbox 后台录制这类常见设置，也会检查虚拟内存和显示器刷新率，以及显卡驱动是否过旧、游戏是否装在机械硬盘上。不想玩游戏也可以单独运行 `StutterLens.exe check` 做这项检查。
 
@@ -77,6 +84,7 @@ StutterLens.exe check                    # 系统设置检查，不需要管理�
 StutterLens.exe --process game.exe       # 只监控指定的游戏
 StutterLens.exe --mode safe              # 强制使用安全模式
 StutterLens.exe --include-background     # 游戏在副屏或不在前台时也计入卡顿
+StutterLens.exe config                   # 修改报告保存位置
 StutterLens.exe help                     # 查看全部选项
 ```
 

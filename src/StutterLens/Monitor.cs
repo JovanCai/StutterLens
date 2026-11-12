@@ -16,6 +16,7 @@ public sealed class MonitorOptions
     public bool IncludeBackground;
     public bool OpenReport = true;
     public double MinSessionSec = 20;
+    public int KeepReports;
 }
 
 /// <summary>后台监控主循环：采集 → 识别游戏 → 检测卡顿 → 归因 → 出报告。</summary>
@@ -90,9 +91,12 @@ public sealed class GameMonitor : IDisposable
                 Log.Info("");
                 Log.Info($"▶ 开始检测：{started.Title}（{started.Exe}）", ConsoleColor.Cyan);
                 if (started.KnownAntiCheat != null) Log.Info($"  已知反作弊：{started.KnownAntiCheat}");
+                if (_sampler.Input.Devices.Count > 0)
+                    Log.Info($"  外设：{string.Join("、", _sampler.Input.Devices.Select(d => d.Label))}", ConsoleColor.DarkGray);
             }
 
             var s = _tracker.Session;
+            if (s != null) s.Input.Update(_sampler.Input);
             if (s == null)
             {
                 if (_etw.KernelActive) _etw.StopKernelSession();
@@ -131,6 +135,7 @@ public sealed class GameMonitor : IDisposable
                 if (_etw.StartKernelSession())
                 {
                     s.KernelUsed = true;
+                    s.KernelSinceMs = Clock.NowMs;
                     s.EffectiveMode = MonitorMode.Full;
                     Log.Info("  未检测到反作弊，已启用深度模式（驱动 DPC/ISR 与磁盘 IO 追踪）。");
                 }
@@ -198,6 +203,8 @@ public sealed class GameMonitor : IDisposable
             }
 
             var findings = _analyzer.Summarize(s);
+            var cmp = SessionComparer.Compare(s, _opt.OutDir);
+            if (cmp != null) findings.Insert(Math.Min(1, findings.Count), cmp);
             var report = new SessionReport
             {
                 Session = s,
@@ -214,6 +221,8 @@ public sealed class GameMonitor : IDisposable
             };
             var path = ReportWriter.Write(report, _opt.OutDir);
             WrittenReports.Add(path);
+            int pruned = Settings.Prune(_opt.OutDir, _opt.KeepReports);
+            if (pruned > 0) Log.Debug($"已删除 {pruned} 局最旧的报告（保留 {_opt.KeepReports} 局）");
 
             Log.Info($"  平均 {s.AvgFps:F0} FPS，1% Low {s.Low1Fps:F0} FPS。主要结论：");
             foreach (var f in findings.Take(4)) Log.Info($"   · {f.Title}");

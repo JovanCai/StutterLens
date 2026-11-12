@@ -1,4 +1,5 @@
 using StutterLens.Core;
+using StutterLens.Platform;
 
 namespace StutterLens.Analysis;
 
@@ -39,6 +40,67 @@ public sealed class SecondBucket
     public double MaxMs;
 }
 
+/// <summary>一局游戏期间的键鼠手柄情况，用于判断外设是否在拖累游戏，以及和其他局对比。</summary>
+public sealed class InputInfo
+{
+    /// <summary>本局出现过的键盘、鼠标、手柄（按物理设备和类型去重）。</summary>
+    public Dictionary<string, InputDevice> Devices { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public int Seconds;          // 采样秒数
+    public int BtSeconds;        // 有蓝牙手柄连着的秒数
+    public int Drops;            // 输入设备断开次数
+    public int BtDrops;          // 其中蓝牙手柄断开的次数
+    public BtRadio? Radio;
+    public int WifiChannel;
+
+    public IEnumerable<InputDevice> BtPadDevices => Devices.Values.Where(d => d.Kind == InputKind.Gamepad && d.Transport == Transport.Bluetooth);
+    public IEnumerable<string> BtPads => BtPadDevices.Select(d => d.Name).Distinct();
+    public IEnumerable<string> BtPadIds => BtPadDevices.Select(d => d.HidId);
+    public IEnumerable<string> UsbPads => Devices.Values.Where(d => d.Kind == InputKind.Gamepad && d.Transport != Transport.Bluetooth).Select(d => d.Name).Distinct();
+    public IEnumerable<InputDevice> BtOthers => Devices.Values.Where(d => d.Kind != InputKind.Gamepad && d.Transport == Transport.Bluetooth);
+    public bool Wifi24GHz => WifiChannel is >= 1 and <= 14;
+
+    /// <summary>本局主要的手柄连接方式：bluetooth / usb / none。蓝牙连着超过一半时间才算蓝牙。</summary>
+    public string Connection =>
+        BtSeconds > 0 && BtSeconds * 2 >= Seconds ? "bluetooth"
+        : UsbPads.Any() ? "usb"
+        : BtSeconds > 0 ? "bluetooth"
+        : "none";
+
+    public static string ConnectionName(string c) => c switch
+    {
+        "bluetooth" => "蓝牙", "usb" => "数据线或接收器", _ => "未连接手柄",
+    };
+
+    public void Update(InputSnapshot snap)
+    {
+        Seconds++;
+        if (snap.BtPadConnected) BtSeconds++;
+        foreach (var d in snap.Devices) Devices.TryAdd(d.Key + "|" + d.Kind, d);
+        Radio ??= snap.Radio;
+        if (snap.WifiChannel > 0) WifiChannel = snap.WifiChannel;
+    }
+
+    public string Describe()
+    {
+        var parts = new List<string> { $"手柄连接方式：{ConnectionName(Connection)}" };
+        if (Devices.Count > 0) parts.Add("外设 " + string.Join("、", Devices.Values.Select(d => d.Label)));
+        if (BtSeconds > 0) parts.Add($"蓝牙手柄连接 {BtSeconds}/{Seconds} 秒");
+        parts.Add($"外设断开 {Drops} 次");
+        if (Radio != null) parts.Add($"蓝牙适配器 {Radio.Name}（蓝牙 {Radio.Version}，{Radio.InstanceId}）");
+        parts.Add(WifiChannel > 0 ? $"Wi-Fi 信道 {WifiChannel}" : "未使用 Wi-Fi");
+        return string.Join("；", parts);
+    }
+
+    public static string Describe(InputSnapshot s)
+    {
+        var parts = s.Devices.Select(d => d.Label).ToList();
+        if (parts.Count == 0) parts.Add("未发现键盘、鼠标或手柄");
+        if (s.Radio != null) parts.Add($"蓝牙适配器 {s.Radio.Name}（蓝牙 {s.Radio.Version}）");
+        parts.Add(s.WifiChannel > 0 ? $"Wi-Fi 信道 {s.WifiChannel}（{(s.Wifi24GHz ? "2.4GHz" : "5GHz 或更高")}）" : "未使用 Wi-Fi");
+        return string.Join("；", parts);
+    }
+}
+
 /// <summary>一次“游戏会话”（从识别到游戏开始渲染，到游戏退出）。</summary>
 public sealed class GameSession
 {
@@ -50,7 +112,10 @@ public sealed class GameSession
     public MonitorMode RequestedMode { get; init; }
     public MonitorMode EffectiveMode { get; set; }
     public HashSet<string> AntiCheatsSeen { get; } = new();
+    public InputInfo Input { get; } = new();
     public bool KernelUsed { get; set; }
+    /// <summary>内核追踪开始的时刻，之前的时段没有 DPC/磁盘数据。</summary>
+    public double KernelSinceMs { get; set; }
     public double StartMs { get; init; }
     public double EndMs { get; set; }
     public double LastFrameMs { get; private set; }
@@ -177,6 +242,12 @@ public sealed class GameSession
     public List<SecondBucket> SecondsSnapshot()
     {
         lock (_gate) return Seconds.Select(b => new SecondBucket { Sec = b.Sec, Frames = b.Frames, SumMs = b.SumMs, MaxMs = b.MaxMs }).ToList();
+    }
+
+    /// <summary>[from, to] 内各次卡顿的起止时刻（含未分析的），用于挑选“没卡的时段”做对照。</summary>
+    public List<(double Start, double End)> StutterSpans(double from, double to)
+    {
+        lock (_gate) return Stutters.Where(s => s.T >= from && s.T - s.SpanMs <= to).Select(s => (s.T - s.SpanMs, s.T)).ToList();
     }
 
     public List<Stutter> PendingStutters(double olderThan)

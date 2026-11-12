@@ -27,6 +27,11 @@ public sealed class SystemSampler : IDisposable
     private readonly int _selfPid = Environment.ProcessId;
 
     public volatile int TargetPid;
+
+    // 手柄：每 15 秒刷新一次完整清单，每秒只查一次已知蓝牙手柄是否还连着
+    private InputSnapshot _input = new();
+    private int _inputTick;
+    public InputSnapshot Input => _input;
     public double VramTotalMB { get; }
     public int LogicalCores { get; } = Environment.ProcessorCount;
 
@@ -156,8 +161,9 @@ public sealed class SystemSampler : IDisposable
             double maxCore = 0;
             foreach (var c in _cores) maxCore = Math.Max(maxCore, V(c));
             s.CpuMaxCore = maxCore;
-            SampleGpu(s, target);
+            SampleGpu(s, target, snap);
             s.VramTotalMB = VramTotalMB;
+            s.BtPadConnected = PollInput(now);
 
             if (dt > 0)
             {
@@ -172,7 +178,44 @@ public sealed class SystemSampler : IDisposable
         finally { Volatile.Write(ref _busy, 0); }
     }
 
-    private void SampleGpu(SysSample s, int target)
+    private bool PollInput(double now)
+    {
+        try
+        {
+            var old = _input;
+            bool first = _inputTick == 0;
+            InputSnapshot cur;
+            if (_inputTick++ % 15 == 0) cur = Peripherals.Snapshot();
+            else
+            {
+                // 每秒只取 HID 设备列表比对，有变化才重新归并
+                var ids = Peripherals.HidIds();
+                cur = ids.SetEquals(old.HidIds) ? old : new InputSnapshot
+                {
+                    Devices = Peripherals.Devices(ids).Concat(old.Devices.Where(d => !d.HidId.StartsWith(@"HID\", StringComparison.OrdinalIgnoreCase))).ToList(),
+                    HidIds = ids, Radio = old.Radio, WifiChannel = old.WifiChannel,
+                };
+            }
+            if (!first && !ReferenceEquals(cur, old))
+            {
+                var oldKeys = old.Devices.Select(d => d.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var newKeys = cur.Devices.Select(d => d.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                foreach (var d in old.Devices.Where(d => !newKeys.Contains(d.Key)).DistinctBy(d => d.Key))
+                    _store.Input.Add(new InputEvent(now, d, false));
+                foreach (var d in cur.Devices.Where(d => !oldKeys.Contains(d.Key)).DistinctBy(d => d.Key))
+                    _store.Input.Add(new InputEvent(now, d, true));
+            }
+            _input = cur;
+            return cur.BtPadConnected;
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("input: " + ex.Message);
+            return false;
+        }
+    }
+
+    private void SampleGpu(SysSample s, int target, List<ProcInfo> snap)
     {
         if (!_gpuCountersOk) return;
         try
@@ -180,6 +223,7 @@ public sealed class SystemSampler : IDisposable
             var data = new PerformanceCounterCategory("GPU Engine").ReadCategory();
             var util = data["utilization percentage"];
             var perEngine = new Dictionary<string, double>();
+            var perPidEngine = new Dictionary<(int Pid, string Eng), double>();
             double targetMax = 0;
             var seen = new HashSet<string>();
             string targetPrefix = $"pid_{target}_";
@@ -199,6 +243,9 @@ public sealed class SystemSampler : IDisposable
                         {
                             var engKey = name.Substring(luid, engType - luid);
                             perEngine[engKey] = perEngine.GetValueOrDefault(engKey) + v;
+                            // 实例名形如 pid_1234_luid_..._eng_0_engtype_3D
+                            if (name.StartsWith("pid_", StringComparison.Ordinal) && int.TryParse(name.AsSpan(4, luid - 4), out int gpid) && gpid != 0)
+                                perPidEngine[(gpid, engKey)] = perPidEngine.GetValueOrDefault((gpid, engKey)) + v;
                             if (target != 0 && name.StartsWith(targetPrefix, StringComparison.Ordinal) && name.EndsWith("engtype_3D", StringComparison.Ordinal))
                                 targetMax = Math.Max(targetMax, v);
                         }
@@ -209,13 +256,23 @@ public sealed class SystemSampler : IDisposable
             foreach (var k in _gpuPrev.Keys.Where(k => !seen.Contains(k)).ToList()) _gpuPrev.Remove(k);
             s.GpuUtil = Math.Min(100, perEngine.Count == 0 ? 0 : perEngine.Values.Max());
             s.GpuTargetUtil = Math.Min(100, targetMax);
+            var names = snap.GroupBy(p => p.Pid).ToDictionary(g => g.Key, g => g.First().Name);
+            s.GpuProcs = perPidEngine.GroupBy(kv => kv.Key.Pid)
+                .Select(g => (Pid: g.Key, Util: Math.Min(100, g.Max(kv => kv.Value))))
+                .Where(x => x.Util >= 5 && x.Pid != target)
+                .OrderByDescending(x => x.Util).Take(5)
+                .Select(x => new ProcCpu(x.Pid, names.GetValueOrDefault(x.Pid, "pid " + x.Pid), x.Util)).ToList();
 
             var mem = new PerformanceCounterCategory("GPU Adapter Memory").ReadCategory();
             var ded = mem["dedicated usage"];
-            double maxUsed = 0;
+            var shared = mem["shared usage"];
+            double maxUsed = 0, maxShared = 0;
             if (ded != null)
                 foreach (InstanceData d in ded.Values) maxUsed = Math.Max(maxUsed, d.RawValue);
+            if (shared != null)
+                foreach (InstanceData d in shared.Values) maxShared = Math.Max(maxShared, d.RawValue);
             s.VramUsedMB = maxUsed / 1048576.0;
+            s.VramSharedMB = maxShared / 1048576.0;
         }
         catch (Exception ex)
         {

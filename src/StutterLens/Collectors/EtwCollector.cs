@@ -169,7 +169,11 @@ public sealed class EtwCollector : IDisposable
         }
     }
 
-    private void OnImage(ImageLoadTraceData d) => _store.Drivers.Add(d.ImageBase, (ulong)d.ImageSize, d.FileName);
+    private void OnImage(ImageLoadTraceData d)
+    {
+        _store.Drivers.Add(d.ImageBase, (ulong)d.ImageSize, d.FileName);
+        if (d.ImageBase < 0xFFFF800000000000UL) _store.NoteModule(d.ProcessID, d.FileName);
+    }
 
     private double KT(TraceEvent e)
     {
