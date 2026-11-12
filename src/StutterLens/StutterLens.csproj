@@ -13,7 +13,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
 
     <!-- 版本与元数据（发布时由 CI 通过 -p:Version=x.y.z 覆盖） -->
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Product>StutterLens</Product>
     <AssemblyTitle>StutterLens 游戏卡顿检测与诊断</AssemblyTitle>
     <Description>游戏卡顿检测与诊断工具</Description>
