@@ -13,7 +13,7 @@ The report UI and suggestions are currently in Chinese. Sample report: [docs/sam
 
 ## Getting started
 
-1. Download `StutterLens-x.y.z-win-x64.zip` from [Releases](../../releases) and extract it anywhere.
+1. Download the latest build from [Releases](../../releases) and extract it anywhere. Pick `win-x64` for most PCs, or `win-arm64` for ARM laptops such as Snapdragon X devices.
 2. Run `StutterLens.exe` and accept the UAC prompt. Reading frame events requires administrator rights.
 3. Play as usual. StutterLens picks up the game automatically.
 4. When the game exits, the report opens in your browser. You can also press Ctrl+C or close the window to finish early.
@@ -22,7 +22,7 @@ Reports are saved to `%LOCALAPPDATA%\StutterLens\Reports`.
 
 > Windows SmartScreen may warn about an unrecognized app because the binary is not code-signed yet. Choose "More info → Run anyway", or build from source.
 
-**Requirements:** Windows 10 1809+ or Windows 11, x64, administrator rights.
+**Requirements:** 64-bit Windows 10 1809+ or Windows 11 on x64 or ARM64, administrator rights. The ARM64 build has not yet been tested with real games on ARM hardware; reports are welcome.
 
 ## Anti-cheat safety
 
@@ -68,7 +68,11 @@ dotnet test StutterLens.sln -c Release
 dotnet publish src/StutterLens -p:PublishProfile=win-x64
 ```
 
-The self-contained single-file `StutterLens.exe` is written to `artifacts/publish/`.
+```bash
+dotnet publish src/StutterLens -p:PublishProfile=win-arm64
+```
+
+The self-contained single-file `StutterLens.exe` is written to `artifacts/publish/win-x64/` or `artifacts/publish/win-arm64/`. The ARM64 build can be cross-compiled on an x64 machine.
 
 ## Feedback
 

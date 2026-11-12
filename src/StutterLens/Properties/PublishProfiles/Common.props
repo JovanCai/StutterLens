@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 各架构发布配置共用的设置 -->
+<Project>
+  <PropertyGroup>
+    <Configuration>Release</Configuration>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <!-- 不压缩：压缩包启动时要把程序集解压进内存，常驻内存会多出约 30MB -->
+    <EnableCompressionInSingleFile>false</EnableCompressionInSingleFile>
+    <!-- 预编译：减少启动时的 JIT 开销和内存 -->
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+</Project>

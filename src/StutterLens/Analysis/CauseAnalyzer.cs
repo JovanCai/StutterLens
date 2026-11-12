@@ -223,7 +223,9 @@ public sealed class CauseAnalyzer
                 hits.Add(Hit("disk_io", 0.45, "卡顿时硬盘满负荷，响应明显变慢",
                     $"磁盘平均响应 {smp.DiskLatencyMs:F0}ms，繁忙 {smp.DiskBusyPct:F0}%"));
 
-            if (smp.VramTotalMB > 0 && smp.VramUsedMB / smp.VramTotalMB >= 0.95)
+            // 核显（Intel、骁龙 Adreno 等）只登记很少的“专用显存”，主要用共享内存，
+            // 按专用显存算占用率会误报，所以只对 2GB 以上的独立显存做判断
+            if (smp.VramTotalMB >= 2048 && smp.VramUsedMB / smp.VramTotalMB >= 0.95)
                 hits.Add(Hit("vram_full", 0.55, $"显存占用 {smp.VramUsedMB / 1024:F1}/{smp.VramTotalMB / 1024:F1}GB",
                     $"Dedicated {smp.VramUsedMB:F0}/{smp.VramTotalMB:F0}MB"));
 

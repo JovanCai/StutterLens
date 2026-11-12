@@ -13,7 +13,7 @@ StutterLens 是一款后台运行的 Windows 游戏卡顿诊断工具。它会�
 
 ## 下载与使用
 
-1. 到 [Releases](../../releases) 页面下载最新版的 `StutterLens-x.y.z-win-x64.zip`，解压到任意文件夹。
+1. 到 [Releases](../../releases) 页面下载最新版，解压到任意文件夹。大多数电脑选 `win-x64`，骁龙等 ARM 处理器的笔记本选 `win-arm64`。不确定的话，在 设置 → 系统 → 系统信息 中查看“系统类型”。
 2. 双击 `StutterLens.exe`，在弹出的 UAC 窗口中点“是”。读取帧数据需要管理员权限。
 3. 正常打开游戏玩就行，StutterLens 会自动识别并开始记录。
 4. 游戏退出后，报告会自动在浏览器中打开。中途想结束，在 StutterLens 窗口按 Ctrl+C 或直接关闭窗口，同样会生成报告。
@@ -22,7 +22,7 @@ StutterLens 是一款后台运行的 Windows 游戏卡顿诊断工具。它会�
 
 > **首次运行时 Windows 可能提示“已保护你的电脑”。** 这是因为程序还没有代码签名，点“更多信息 → 仍要运行”即可。个别杀毒软件可能因为程序需要管理员权限并读取系统事件而误报，可以自行检查 [源码](src/StutterLens) 或从源码构建。
 
-**系统要求**：Windows 10（1809 及以上）或 Windows 11，x64，需要管理员权限。
+**系统要求**：64 位的 Windows 10（1809 及以上）或 Windows 11，x64 或 ARM64 处理器，需要管理员权限。
 
 ## 反作弊与账号安全
 
@@ -91,6 +91,9 @@ StutterLens 会把在前台、每秒提交 15 帧以上并持续 3 秒的程序�
 **某些游戏拿不到帧数据？**
 少数游戏会主动屏蔽 ETW，这时 StutterLens 只能做系统层面的检查。
 
+**支持 ARM 处理器的 Windows 电脑吗？**
+支持，请下载 `win-arm64` 版本。ARM64 版还没有在真机上做过游戏实测，欢迎 ARM 设备用户反馈。另外，不少带反作弊的游戏本身还不支持 ARM 设备。
+
 **报告里的“把握”是什么意思？**
 原因是根据卡顿那一刻的系统状态推测出来的，属于相关性分析，“把握”反映推测的可信度。同一个原因反复出现、把握又高的话，基本可以确定。
 
@@ -119,7 +122,11 @@ dotnet test StutterLens.sln -c Release
 dotnet publish src/StutterLens -p:PublishProfile=win-x64
 ```
 
-最后一条会在 `artifacts/publish/` 生成自带运行时的单个 `StutterLens.exe`。
+```bash
+dotnet publish src/StutterLens -p:PublishProfile=win-arm64
+```
+
+发布命令会在 `artifacts/publish/win-x64/` 或 `artifacts/publish/win-arm64/` 生成自带运行时的单个 `StutterLens.exe`。ARM64 版可以在 x64 电脑上交叉编译。
 
 代码结构：
 

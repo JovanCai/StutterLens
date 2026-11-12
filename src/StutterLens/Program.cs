@@ -21,6 +21,12 @@ string? Opt(string name)
 }
 bool Flag(string name) => argList.Contains(name);
 
+if (!Environment.Is64BitProcess)
+{
+    Console.WriteLine("StutterLens 只支持 64 位 Windows（x64 或 ARM64）。");
+    return 3;
+}
+
 if (Flag("--verbose")) Log.Verbose = true;
 if (Opt("--log") is { } logPath) Log.OpenFile(logPath);
 
@@ -136,6 +142,9 @@ if (double.TryParse(Opt("--min-session"), out var ms)) opt.MinSessionSec = ms;
 Log.Quiet = Flag("--quiet");
 
 Log.Info($"StutterLens {AppVersion()} · 游戏卡顿检测与诊断");
+if (System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.Arm64
+    && System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture != System.Runtime.InteropServices.Architecture.Arm64)
+    Log.Warn("当前是 ARM64 设备，但运行的是 x64 版本（经系统转译运行，开销更高）。建议下载 win-arm64 版本。");
 int exitCode = 0;
 int reports = 0;
 try

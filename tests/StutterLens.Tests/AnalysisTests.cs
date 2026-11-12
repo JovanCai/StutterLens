@@ -55,7 +55,27 @@ public class AnalysisTests
         Assert.DoesNotContain(hits, h => h.Key.StartsWith("dpc:"));
     }
 
+    [Fact]
+    public void IntegratedGpuSmallDedicatedVram_IsNotReportedAsFull()
+    {
+        var store = new SignalStore();
+        // 核显：专用显存只登记了 512MB，占用率接近 100% 是常态
+        store.Sys.Add(new SysSample { T = 50_000, VramTotalMB = 512, VramUsedMB = 510 });
+        var hits = new CauseAnalyzer(store).Analyze(MakeStutter(49_800, 80), Session(), kernel: false);
+        Assert.DoesNotContain(hits, h => h.Key == "vram_full");
+    }
+
+    [Fact]
+    public void DiscreteGpuFullVram_IsReported()
+    {
+        var store = new SignalStore();
+        store.Sys.Add(new SysSample { T = 50_000, VramTotalMB = 8192, VramUsedMB = 8100 });
+        var hits = new CauseAnalyzer(store).Analyze(MakeStutter(49_800, 80), Session(), kernel: false);
+        Assert.Contains(hits, h => h.Key == "vram_full");
+    }
+
     [Theory]
+    [InlineData("qcdxkmsuc8380.sys", "gpu")]
     [InlineData("nvlddmkm.sys", "gpu")]
     [InlineData("amdkmdag.sys", "gpu")]
     [InlineData("ndis.sys", "net")]

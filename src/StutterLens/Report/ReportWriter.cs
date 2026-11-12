@@ -71,6 +71,14 @@ public static class ReportWriter
             dpcTop = r.DpcTop.Take(10).Select(d => new { d.Driver, d.Count, totalMs = Math.Round(d.TotalMs, 1), maxMs = Math.Round(d.MaxMs, 3) }),
             overhead = new { cpuAvgPct = Math.Round(r.SelfCpuAvg, 2), cpuMaxPct = Math.Round(r.SelfCpuMax, 2), memMB = r.SelfMemMB, r.EventsLost },
             notes = r.Notes,
+            environment = new
+            {
+                app = typeof(ReportWriter).Assembly.GetName().Version?.ToString(3),
+                os = Environment.OSVersion.VersionString,
+                osArch = System.Runtime.InteropServices.RuntimeInformation.OSArchitecture.ToString(),
+                processArch = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString(),
+                logicalCores = Environment.ProcessorCount,
+            },
         };
         return JsonSerializer.Serialize(obj, new JsonSerializerOptions
         {

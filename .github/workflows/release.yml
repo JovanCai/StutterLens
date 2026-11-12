@@ -1,6 +1,6 @@
 name: Release
 
-# 推送 v1.2.3 这样的标签时自动打包，并创建一个“草稿”发布。
+# 推送 v1.2.3 这样的标签时自动打包 x64 和 ARM64 两个版本，并创建一个“草稿”发布。
 # 草稿需要维护者在 GitHub 上检查后手动点击发布。
 on:
   push:
@@ -10,7 +10,23 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  test:
+    name: test-${{ matrix.arch }}
+    runs-on: ${{ matrix.arch == 'arm64' && 'windows-11-arm' || 'windows-latest' }}
+    strategy:
+      matrix:
+        # GitHub 的 Windows ARM 托管机器只对公开仓库免费，私有仓库时只测 x64
+        arch: ${{ fromJSON(github.event.repository.private && '["x64"]' || '["x64","arm64"]') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Test
+        run: dotnet test StutterLens.sln -c Release
+
+  package:
+    needs: test
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,23 +42,29 @@ jobs:
           $v = "${{ github.ref_name }}".TrimStart('v')
           "version=$v" >> $env:GITHUB_OUTPUT
 
-      - name: Test
-        run: dotnet test StutterLens.sln -c Release
-
-      - name: Publish
-        run: dotnet publish src/StutterLens -p:PublishProfile=win-x64 -p:Version=${{ steps.ver.outputs.version }}
-
-      - name: Package
+      - name: Publish and package
         shell: pwsh
         run: |
           $v = "${{ steps.ver.outputs.version }}"
-          $name = "StutterLens-$v-win-x64"
-          New-Item -ItemType Directory -Force "dist/$name" | Out-Null
-          Copy-Item artifacts/publish/StutterLens.exe, README.md, README.en.md, LICENSE, CHANGELOG.md "dist/$name/"
-          Compress-Archive -Path "dist/$name/*" -DestinationPath "dist/$name.zip"
-          $hash = (Get-FileHash "dist/$name.zip" -Algorithm SHA256).Hash.ToLower()
-          "$hash  $name.zip" | Out-File -Encoding ascii "dist/$name.zip.sha256"
-          Get-Content "dist/$name.zip.sha256"
+          New-Item -ItemType Directory -Force dist | Out-Null
+          foreach ($arch in 'x64', 'arm64') {
+            dotnet publish src/StutterLens -p:PublishProfile=win-$arch -p:Version=$v
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+            $name = "StutterLens-$v-win-$arch"
+            New-Item -ItemType Directory -Force "dist/$name" | Out-Null
+            Copy-Item "artifacts/publish/win-$arch/StutterLens.exe", README.md, README.en.md, LICENSE, CHANGELOG.md "dist/$name/"
+            Compress-Archive -Path "dist/$name/*" -DestinationPath "dist/$name.zip"
+          }
+          # x64 版可以在这台机器上直接运行，确认版本号写对了
+          # 程序集版本只有数字部分，v0.2.0-beta 这样的预发布标签只比较 0.2.0
+          $got = & artifacts/publish/win-x64/StutterLens.exe --version
+          $num = ($v -split '-')[0]
+          if ($got -ne "StutterLens $num") { Write-Error "版本号不符：$got"; exit 1 }
+          Get-ChildItem dist/*.zip | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash  $($_.Name)"
+          } | Out-File -Encoding ascii dist/SHA256SUMS.txt
+          Get-Content dist/SHA256SUMS.txt
 
       - name: Create draft release
         shell: pwsh
@@ -50,5 +72,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $v = "${{ steps.ver.outputs.version }}"
-          gh release create "${{ github.ref_name }}" dist/*.zip dist/*.sha256 `
+          gh release create "${{ github.ref_name }}" dist/*.zip dist/SHA256SUMS.txt `
             --draft --title "StutterLens $v" --generate-notes

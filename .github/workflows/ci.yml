@@ -10,7 +10,13 @@ permissions:
 
 jobs:
   build:
-    runs-on: windows-latest
+    name: ${{ matrix.arch }}
+    runs-on: ${{ matrix.arch == 'arm64' && 'windows-11-arm' || 'windows-latest' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # GitHub 的 Windows ARM 托管机器只对公开仓库免费，私有仓库时只跑 x64
+        arch: ${{ fromJSON(github.event.repository.private && '["x64"]' || '["x64","arm64"]') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -24,12 +30,12 @@ jobs:
       - name: Test
         run: dotnet test StutterLens.sln -c Release --no-build
 
-      - name: Publish (smoke test)
-        run: dotnet publish src/StutterLens -p:PublishProfile=win-x64
+      - name: Publish
+        run: dotnet publish src/StutterLens -p:PublishProfile=win-${{ matrix.arch }}
 
       - name: Check single-file exe runs
         shell: pwsh
         run: |
-          $v = & artifacts/publish/StutterLens.exe --version
+          $v = & artifacts/publish/win-${{ matrix.arch }}/StutterLens.exe --version
           Write-Host $v
           if ($LASTEXITCODE -ne 0) { exit 1 }

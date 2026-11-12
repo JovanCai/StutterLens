@@ -252,6 +252,7 @@ public static class KnowledgeBase
     private static readonly (string Prefix, string Device)[] DriverPrefixes =
     {
         ("nvlddmkm", "gpu"), ("amdkmdag", "gpu"), ("atikmdag", "gpu"), ("igdkmd", "gpu"), ("dxgkrnl", "gpu"), ("dxgmms", "gpu"),
+        ("qcdx", "gpu"),   // 高通 Adreno（Windows on ARM）
         ("nvhda", "audio"), ("hdaudbus", "audio"), ("portcls", "audio"), ("rtkvhd", "audio"),
         ("ndis", "net"), ("tcpip", "net"), ("netio", "net"), ("rt640", "net"), ("rt68", "net"), ("rtux", "net"), ("rtwlan", "net"),
         ("netwtw", "net"), ("netadaptercx", "net"), ("e1d", "net"), ("e2f", "net"), ("killer", "net"),
